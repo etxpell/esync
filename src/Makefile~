@@ -1,0 +1,78 @@
+
+include modules.mk
+
+APPFILE     = $(EBIN)/rx.app
+DICT_MODULE = rx_gen
+
+GENERATED = $(DICT_MODULE).erl $(DICT_MODULE).hrl
+
+APP_MODULES = $(MODULES) $(DICT_MODULE)
+INC_FILES   = $(INCLUDE)/$(DICT_MODULE).hrl
+
+BEAM = $(APP_MODULES:%=$(EBIN)/%.beam)
+
+DIAMETER_TOP = $(shell erl \
+                         -boot start_clean \
+                         -noshell \
+                         -eval 'io:format("~p~n", [code:lib_dir(diameter)])' \
+                         -s init stop)
+
+EBIN    = ../ebin
+INCLUDE = ../inc
+
+ERL_CRASH_DUMP = /dev/null
+
+VSN = $(shell date +"%Y-%m-%d %H:%M:%S")
+
+# ============================================================================
+
+$(EBIN)/%.app: %.app.src | $(EBIN)
+	M=`echo $(APP_MODULES) | tr ' ' ,`; \
+	sed 's;\({vsn,\)[^}]*\(.*\);\1 "$(VSN)"\2'" {modules, [$$M]},;" $< > $@
+
+$(EBIN)/%.beam: %.erl | $(EBIN)
+	erlc -W +debug_info -I $(INCLUDE) -o $(@D) $<
+
+%_gen.erl %_gen.hrl: %.dia
+	D=$(DIAMETER_TOP); $$D/bin/diameterc -i $$D/ebin -o . $<
+
+$(INCLUDE)/%_gen.hrl: %_gen.hrl
+	cp -p $< $@
+
+# ============================================================================
+
+all: app beam hrl
+
+app:  $(APPFILE)
+beam: $(BEAM)
+gen:  $(GENERATED)
+hrl:  $(INC_FILES)
+
+$(EBIN):
+	mkdir $@
+
+clean:
+	rm -f depend.mk $(APPFILE) $(BEAM)
+
+realclean: clean
+	rm -f $(GENERATED) $(INC_FILES)
+
+$(APPFILE): modules.mk
+
+.SECONDARY: $(GENERATED)
+.PHONY: all app beam gen hrl clean realclean
+
+# ============================================================================
+
+depend: depend.mk
+
+# Generate dependencies makefile.
+depend.mk: depend.sed $(MODULES:%=%.erl) GNUmakefile
+	(for f in $(MODULES); do \
+	     (echo $$f; cat $$f.erl) | sed -f $<; \
+	 done) \
+	> $@
+
+-include depend.mk
+
+.PHONY: depend

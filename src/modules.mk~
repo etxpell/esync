@@ -1,0 +1,8 @@
+
+MODULES = \
+	rx \
+	rx_app \
+	rx_cb \
+	rx_service \
+	rx_sup \
+	rx_types
